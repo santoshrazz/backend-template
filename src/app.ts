@@ -1,7 +1,12 @@
-import express, { Express, Request, Response } from 'express';
+import express, { Express } from 'express';
 import { globalErrorHandler, loggerMiddleware } from './middleware';
 import v1 from "./routes";
+import dotenv from "dotenv";
 
+dotenv.config({
+    path: `.env.${process.env.NODE_ENV}`
+});
+console.log(`Running in ${process.env.NODE_ENV} mode`)
 const app: Express = express();
 
 // Middleware
@@ -11,14 +16,10 @@ app.use(express.json({
     logBody: true,
     logHeaders: false,
     logResponseBody: false,
-}));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+})).use(express.urlencoded({ extended: true }));
+
 app.use("/v1", v1)
-// Routes
-app.get('/test', (req: Request, res: Response) => {
-    res.status(200).send('Welcome to Portfolio Backend');
-});
+
 
 // Global Error Handler Middleware 
 app.use(globalErrorHandler);

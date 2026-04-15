@@ -6,11 +6,11 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/bin/www.js",
-    "start:dev": "nodemon --exec ts-node src/bin/www.ts",
+    "start:dev": "cross-env NODE_ENV=development nodemon --exec \"ts-node src/bin/www.ts\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prepare": "husky install"
+    "prepare": "husky install || true"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +23,7 @@
     "@types/node": "^25.6.0",
     "@typescript-eslint/eslint-plugin": "^8.58.2",
     "@typescript-eslint/parser": "^8.58.2",
+    "cross-env": "^10.1.0",
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
@@ -38,6 +39,7 @@
   "dependencies": {
     "axios": "^1.15.0",
     "camelize": "^1.0.1",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "sequelize": "^6.37.8"
   }

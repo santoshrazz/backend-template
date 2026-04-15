@@ -3,8 +3,8 @@
 import app from '../app';
 import { cpus } from "node:os";
 import cluster from "node:cluster";
-const port = process.env.PORT || 3000;
-const noOfCpus = cpus().length;
+const port = process.env.PORT;
+const noOfCpus = process.env.NODE_ENV === "development" ? 1 : cpus().length;
 
 
 if (cluster.isPrimary) {
