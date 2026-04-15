@@ -27,9 +27,7 @@ jobs:
         run: npm ci
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v7
+        uses: SonarSource/sonarqube-scan-action@c8357220fa7152a7881d87dcaefafbd129e37cb9
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        with:
-          projectBaseDir: PROJECT1_PATH
