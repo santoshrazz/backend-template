@@ -1,5 +1,5 @@
 import express, { Express, Request, Response } from 'express';
-import { globalErrorHandler } from './middleware';
+import { globalErrorHandler, loggerMiddleware } from './middleware';
 import v1 from "./routes";
 
 const app: Express = express();
@@ -7,6 +7,10 @@ const app: Express = express();
 // Middleware
 app.use(express.json({
     limit: "100mb"
+})).use(loggerMiddleware({
+    logBody: true,
+    logHeaders: false,
+    logResponseBody: false,
 }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));

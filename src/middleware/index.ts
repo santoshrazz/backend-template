@@ -3,3 +3,4 @@ export {
 } from "./dispatcher"
 
 export { globalErrorHandler } from "./globalErrorHandler"
+export { loggerMiddleware } from "./logger"
