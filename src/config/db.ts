@@ -1,16 +1,25 @@
-import { Sequelize } from "sequelize"
+import { Sequelize } from "sequelize";
+import { getOrThrow } from "../utils";
+const dbName = getOrThrow("DB_NAME");
+const dbUsername = getOrThrow("DB_USERNAME");
+const dbPassword = getOrThrow("DB_PASSWORD");
 
-const sequelize = new Sequelize('database', 'username', 'password', {
-    host: process.env.DB_HOST || 'localhost',
-    dialect: "postgres",
-    username: process.env.DB_USERNAME,
-    database: process.env.DB_NAME,
-    pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
-    }
+const dilectOptions = {
+	ssl: {
+		require: true,
+		rejectUnauthorized: false,
+	},
+};
+const sequelize = new Sequelize(dbName, dbUsername, dbPassword, {
+	host: getOrThrow("DB_HOST") || "localhost",
+	dialect: "postgres",
+	pool: {
+		max: 5,
+		min: 0,
+		acquire: 30000,
+		idle: 10000,
+	},
+	dialectOptions: process.env.NODE_ENV === "production" ? {} : dilectOptions,
 });
 
-export { sequelize }
+export { sequelize };
