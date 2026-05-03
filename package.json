@@ -6,11 +6,17 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/bin/www.js",
-    "start:dev": "cross-env NODE_ENV=development nodemon --exec \"ts-node src/bin/www.ts\"",
+    "start:dev": "nodemon --exec \"ts-node src/bin/www.ts\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prepare": "husky install || true"
+    "prepare": "husky install || true",
+    "migrate": "ts-node src/scripts/migrate.ts",
+    "migrate:up": "ts-node src/scripts/run-migration.ts up",
+    "migrate:down": "ts-node src/scripts/run-migration.ts down",
+    "migrate:status": "ts-node src/scripts/run-migration.ts status",
+    "migrate:reset": "ts-node src/scripts/run-migration.ts reset",
+    "migrate:create": "ts-node src/scripts/new-migration.ts"
   },
   "keywords": [],
   "author": "",
@@ -41,6 +47,9 @@
     "camelize": "^1.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "sequelize": "^6.37.8"
+    "pg": "^8.20.0",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.8",
+    "umzug": "^3.8.2"
   }
 }
