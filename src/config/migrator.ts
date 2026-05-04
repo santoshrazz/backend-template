@@ -10,8 +10,8 @@ const migrator = new Umzug({
 		glob: getMigrationsPath(),
 	},
 	context: {
-		sequelize,
-		queryInterface: sequelize.getQueryInterface(),
+		_sequelize: sequelize,
+		_queryInterface: sequelize.getQueryInterface(),
 	},
 	storage: new SequelizeStorage({ sequelize }),
 	logger: console,
