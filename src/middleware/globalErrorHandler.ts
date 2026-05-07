@@ -1,10 +1,10 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import { statusCodes } from "../utils";
 import AppError from "../utils/errorHandler";
 
 const { INTERNAL_SERVER_ERROR, BAD_REQUEST } = statusCodes;
 
-export const globalErrorHandler = (err: any, req: Request, res: Response) => {
+export const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
 	let statusCode = err.statusCode || INTERNAL_SERVER_ERROR;
 	let message = err.message || "Internal Server Error";
 
@@ -24,7 +24,6 @@ export const globalErrorHandler = (err: any, req: Request, res: Response) => {
 		statusCode = BAD_REQUEST;
 		message = err.message;
 	}
-
 	res.status(statusCode).json({
 		success: false,
 		statusCode,
