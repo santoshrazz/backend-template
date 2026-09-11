@@ -1,4 +1,5 @@
-import { AppError, statusCodes } from "../../utils";
+import { AppError, statusCodes, singleFileUpload, multipleFileUpload } from "../../utils";
+import type { UploadFile } from "../../utils";
 import axios from "axios";
 
 const { INTERNAL_SERVER_ERROR } = statusCodes;
@@ -16,6 +17,14 @@ class General {
 			}
 			throw new AppError(INTERNAL_SERVER_ERROR, error?.message || error);
 		}
+	}
+
+	async uploadSinglFile(file: UploadFile) {
+		return singleFileUpload(file);
+	}
+
+	async uploadMultipleFile(files: UploadFile[]) {
+		return multipleFileUpload(files);
 	}
 }
 export { General };

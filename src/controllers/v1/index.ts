@@ -1,1 +1,1 @@
-export { testFunction } from "./general"
+export { testFunction, uploadSinglFile, uploadMultipleFile } from "./general"

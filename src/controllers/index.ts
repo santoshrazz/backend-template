@@ -1,1 +1,1 @@
-export { testFunction } from "./v1"
+export { testFunction, uploadSinglFile, uploadMultipleFile } from "./v1"
