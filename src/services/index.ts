@@ -1,5 +1,1 @@
-import {General} from "./general";
-
-export {
-    General
-};
+export { General } from "./general";
