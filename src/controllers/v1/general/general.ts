@@ -24,4 +24,9 @@ const uploadMultipleFile = async (req: Request, res: Response, next: NextFunctio
 	return { urls };
 };
 
-export { testFunction, uploadSinglFile, uploadMultipleFile };
+// No service — nothing here is business logic, just process introspection.
+const healthCheck = async (req: Request, res: Response, next: NextFunction) => {
+	return { status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() };
+};
+
+export { testFunction, uploadSinglFile, uploadMultipleFile, healthCheck };

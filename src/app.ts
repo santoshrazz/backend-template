@@ -1,4 +1,5 @@
 import express, { Express } from "express";
+import helmet from "helmet";
 import { globalErrorHandler, loggerMiddleware } from "./middleware";
 import { serveFile } from "./utils";
 import v1 from "./routes";
@@ -8,18 +9,13 @@ const app: Express = express();
 app.disable("x-powered-by");
 
 // Middleware
-app.use(
-	express.json({
-		limit: "100mb",
-	}),
-)
+app.use(helmet())
 	.use(
-		loggerMiddleware({
-			logBody: true,
-			logHeaders: false,
-			logResponseBody: false,
+		express.json({
+			limit: "100mb",
 		}),
 	)
+	.use(loggerMiddleware)
 	.use(express.urlencoded({ extended: true }));
 
 app.use("/v1", v1);

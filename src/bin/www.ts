@@ -5,6 +5,7 @@ import { loadEnvironment } from "../config/load-env";
 loadEnvironment();
 
 import { initializeEnvironment } from "../init/init";
+import { sequelize } from "../config";
 import app from "../app";
 import http from "node:http";
 import { cpus } from "node:os";
@@ -40,6 +41,33 @@ const onListening = (server: http.Server) => {
 	console.log(`Worker ${process.pid} listening on ${bind}`);
 };
 
+// Stop accepting new connections, let in-flight requests finish, close the
+// DB pool, then exit. Forces exit after a grace period in case something
+// (a stuck connection, a hung query) never lets `server.close` finish.
+const gracefulShutdown = (server: http.Server) => (signal: NodeJS.Signals) => {
+	console.log(`Worker ${process.pid} received ${signal}, shutting down gracefully...`);
+
+	const forceExit = setTimeout(() => {
+		console.error(`Worker ${process.pid} did not shut down in time, forcing exit`);
+		process.exit(1);
+	}, 10_000); // ponytail: fixed 10s grace period, make configurable if slow requests need longer
+	forceExit.unref();
+
+	server.close(async closeError => {
+		if (closeError)
+			console.error(`Worker ${process.pid} error while closing server:`, closeError);
+
+		try {
+			await sequelize.close();
+		} catch (dbError) {
+			console.error(`Worker ${process.pid} error while closing DB connection:`, dbError);
+		}
+
+		clearTimeout(forceExit);
+		process.exit(closeError ? 1 : 0);
+	});
+};
+
 if (cluster.isPrimary) {
 	initializeEnvironment()
 		.then(() => {
@@ -54,13 +82,55 @@ if (cluster.isPrimary) {
 	for (let i = 0; i < noOfCpus; i++) {
 		cluster.fork();
 	}
+
+	let isShuttingDown = false;
+
 	cluster.on("exit", worker => {
+		// Don't respawn a worker that died because *we* told it to shut down —
+		// only unexpected crashes get restarted.
+		if (isShuttingDown) return;
 		console.log(`Worker ${worker.process.pid} died. Restarting`);
 		cluster.fork();
 	});
+
+	// Cluster doesn't forward signals to workers on its own — do it explicitly
+	// so each worker runs its own graceful shutdown instead of being orphaned.
+	// Registering this listener also disables Node's default "exit on signal"
+	// behavior, so the primary must explicitly exit once its workers are gone
+	// — otherwise it lingers in the background, still holding the port.
+	const shutdownPrimary = (signal: NodeJS.Signals) => {
+		if (isShuttingDown) return;
+		isShuttingDown = true;
+		console.log(`Process ${process.pid} received ${signal}, stopping workers...`);
+
+		const workers = Object.values(cluster.workers ?? {}).filter(
+			(worker): worker is NonNullable<typeof worker> => Boolean(worker),
+		);
+
+		if (workers.length === 0) {
+			process.exit(0);
+		}
+
+		let remaining = workers.length;
+		for (const worker of workers) {
+			worker.once("exit", () => {
+				remaining -= 1;
+				if (remaining === 0) process.exit(0);
+			});
+			worker.process.kill(signal);
+		}
+
+		// ponytail: fixed 12s fallback in case a worker outlives its own 10s grace period
+		setTimeout(() => process.exit(1), 12_000).unref();
+	};
+	process.on("SIGTERM", shutdownPrimary);
+	process.on("SIGINT", shutdownPrimary);
 } else {
 	const server = http.createServer(app);
 	server.on("error", onError);
 	server.on("listening", () => onListening(server));
 	server.listen(port);
+
+	process.on("SIGTERM", gracefulShutdown(server));
+	process.on("SIGINT", gracefulShutdown(server));
 }

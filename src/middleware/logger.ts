@@ -1,91 +1,79 @@
-import { Request, Response, NextFunction } from "express";
+import { randomUUID } from "node:crypto";
+import pinoHttp from "pino-http";
+import type { Request, Response, NextFunction } from "express";
+import { logger } from "../utils";
 
-interface LoggerOptions {
-	logBody?: boolean;
-	logHeaders?: boolean;
-	logResponseBody?: boolean;
-}
-
-type LogLevel = "INFO" | "WARN" | "ERROR";
-
-const log = (level: LogLevel, message: any) => {
-	console.log(
-		JSON.stringify(
-			{
-				level,
-				...message,
-			},
-			null,
-			2,
-		),
-	);
-};
-
-export const loggerMiddleware = (options: LoggerOptions = {}) => {
-	const { logBody = true, logHeaders = false, logResponseBody = false } = options;
-
-	return (req: Request, res: Response, next: NextFunction) => {
-		const startTime = process.hrtime();
-
-		// =========================
-		// REQUEST LOG (Immediately)
-		// =========================
-		const requestLog: any = {
-			type: "request",
-			timestamp: new Date().toISOString(),
-			method: req.method,
-			url: req.originalUrl,
-			ip: req.ip,
-		};
-
-		if (logHeaders) requestLog.headers = req.headers;
-		if (logBody) requestLog.body = req.body;
-
-		log("INFO", requestLog);
-
-		// =========================
-		// Capture Response Body
-		// =========================
-		let responseBody: any;
-		const originalSend = res.send;
-
-		if (logResponseBody) {
-			res.send = function (body?: any): Response {
-				responseBody = body;
-				return originalSend.call(this, body);
-			};
+const requestLogger = pinoHttp({
+	logger,
+	genReqId(req, res) {
+		const existingId = (req as Request & { id?: string }).id ?? req.headers["x-request-id"];
+		if (existingId) {
+			return existingId;
 		}
-
-		// =========================
-		// RESPONSE LOG
-		// =========================
-		res.on("finish", () => {
-			const diff = process.hrtime(startTime);
-			const durationMs = (diff[0] * 1e9 + diff[1]) / 1e6;
-			const responseLog: any = {
-				type: "response",
-				timestamp: new Date().toISOString(),
-				method: req.method,
-				url: req.originalUrl,
-				statusCode: res.statusCode,
-				durationMs: Number(durationMs.toFixed(2)),
-			};
-
-			if (logHeaders) responseLog.headers = res.getHeaders();
-			if (logResponseBody) responseLog.body = responseBody;
-
-			// Decide log level based on status code
-			let level: LogLevel = "INFO";
-
-			if (res.statusCode >= 500) {
-				level = "ERROR";
-			} else if (res.statusCode >= 400) {
-				level = "WARN";
+		const id = randomUUID();
+		res.setHeader("X-Request-Id", id);
+		return id;
+	},
+	wrapSerializers: true,
+	customLogLevel(_req, res, err) {
+		if (res.statusCode >= 400 && res.statusCode < 500) {
+			return "warn";
+		}
+		if (res.statusCode >= 500 || err) {
+			return "error";
+		}
+		if (res.statusCode >= 300 && res.statusCode < 400) {
+			return "silent";
+		}
+		return "info";
+	},
+	customSuccessMessage(req, res) {
+		const { method, originalUrl } = req as Request;
+		if (res.statusCode === 404) {
+			return `${method} ${originalUrl} resource not found`;
+		}
+		return `${method} ${originalUrl} ${res.statusCode} completed`;
+	},
+	customReceivedMessage(req) {
+		const { method, originalUrl } = req as Request;
+		return `request received: ${method} ${originalUrl}`;
+	},
+	customErrorMessage(req, res) {
+		const { method, originalUrl } = req as Request;
+		return `${method} ${originalUrl} request errored with status code: ${res.statusCode}`;
+	},
+	customAttributeKeys: { req: "request", res: "response", err: "error" },
+	serializers: {
+		res(res) {
+			const headers = (res as { headers?: Record<string, string> }).headers ?? {};
+			if (headers["content-length"] && Number.parseInt(headers["content-length"]) < 1000) {
+				(res as Record<string, unknown>).body = (
+					res as { raw?: { body?: unknown } }
+				).raw?.body;
 			}
+			return res;
+		},
+	},
+	// No `user` prop — nothing in this template sets req.user yet (no auth
+	// middleware); add it back once one does instead of logging it as undefined.
+	customProps(req) {
+		const expressReq = req as Request & { id?: string };
+		return {
+			requestId: expressReq.id,
+			requestBody: expressReq.body,
+		};
+	},
+});
 
-			log(level, responseLog);
-		});
-
-		next();
+const loggerMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+	const original = res.json.bind(res);
+	res.json = (data: unknown) => {
+		(res as Response & { body?: unknown }).body = data;
+		res.json = original;
+		return res.json(data);
 	};
+	requestLogger(req, res);
+	next();
 };
+
+export { loggerMiddleware };
