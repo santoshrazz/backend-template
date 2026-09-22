@@ -1,1 +1,1 @@
-export { AsyncHandler } from "./types"
+export { AsyncHandler } from "./types";

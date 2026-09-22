@@ -1,11 +1,11 @@
 {
-  "arrowParens": "avoid",
-  "tabWidth": 4,
-  "endOfLine": "auto",
-  "quoteProps": "consistent",
-  "bracketSameLine": true,
-  "useTabs": true,
-  "printWidth": 100,
-  "trailingComma": "all",
-  "semi": true
+	"arrowParens": "avoid",
+	"tabWidth": 4,
+	"endOfLine": "auto",
+	"quoteProps": "consistent",
+	"bracketSameLine": true,
+	"useTabs": true,
+	"printWidth": 100,
+	"trailingComma": "all",
+	"semi": true
 }

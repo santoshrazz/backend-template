@@ -17,18 +17,16 @@ interface UploadFile {
 let s3: { client: S3Client; bucket: string } | undefined;
 
 const getS3 = () => {
-	if (!s3) {
-		s3 = {
-			bucket: getOrThrow("AWS_S3_BUCKET"),
-			client: new S3Client({
-				region: getOrThrow("AWS_REGION"),
-				credentials: {
-					accessKeyId: getOrThrow("AWS_ACCESS_KEY_ID"),
-					secretAccessKey: getOrThrow("AWS_SECRET_ACCESS_KEY"),
-				},
-			}),
-		};
-	}
+	s3 ??= {
+		bucket: getOrThrow("AWS_S3_BUCKET"),
+		client: new S3Client({
+			region: getOrThrow("AWS_REGION"),
+			credentials: {
+				accessKeyId: getOrThrow("AWS_ACCESS_KEY_ID"),
+				secretAccessKey: getOrThrow("AWS_SECRET_ACCESS_KEY"),
+			},
+		}),
+	};
 	return s3;
 };
 

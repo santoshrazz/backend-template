@@ -1,7 +1,12 @@
 import { NextFunction, Router, Request, Response } from "express";
 import multer from "multer";
 import { dispatcher } from "../../../middleware";
-import { testFunction, uploadSinglFile, uploadMultipleFile, healthCheck } from "../../../controllers";
+import {
+	testFunction,
+	uploadSinglFile,
+	uploadMultipleFile,
+	healthCheck,
+} from "../../../controllers";
 
 const generalRoute: Router = Router();
 const upload = multer({
