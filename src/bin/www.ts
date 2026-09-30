@@ -10,6 +10,7 @@ import app from "../app";
 import http from "node:http";
 import { cpus } from "node:os";
 import cluster from "node:cluster";
+import { logger } from "../utils/logger";
 
 const port = process.env.PORT || "3000";
 const noOfCpus = process.env.NODE_ENV === "development" ? 1 : cpus().length;
@@ -44,44 +45,60 @@ const onListening = (server: http.Server) => {
 // Stop accepting new connections, let in-flight requests finish, close the
 // DB pool, then exit. Forces exit after a grace period in case something
 // (a stuck connection, a hung query) never lets `server.close` finish.
-const gracefulShutdown = (server: http.Server) => (signal: NodeJS.Signals) => {
-	console.log(`Worker ${process.pid} received ${signal}, shutting down gracefully...`);
+const gracefulShutdown = (server: http.Server) => {
+	let started = false;
+	return (signal: string, exitCode = 0) => {
+		if (started) return;
+		started = true;
+		console.log(`Worker ${process.pid} received ${signal}, shutting down gracefully...`);
 
-	const forceExit = setTimeout(() => {
-		console.error(`Worker ${process.pid} did not shut down in time, forcing exit`);
-		process.exit(1);
-	}, 10_000); // ponytail: fixed 10s grace period, make configurable if slow requests need longer
-	forceExit.unref();
+		const forceExit = setTimeout(() => {
+			console.error(`Worker ${process.pid} did not shut down in time, forcing exit`);
+			process.exit(1);
+		}, 10_000); // ponytail: fixed 10s grace period, make configurable if slow requests need longer
+		forceExit.unref();
 
-	server.close(async closeError => {
-		if (closeError)
-			console.error(`Worker ${process.pid} error while closing server:`, closeError);
+		server.close(async closeError => {
+			if (closeError)
+				console.error(`Worker ${process.pid} error while closing server:`, closeError);
 
-		try {
-			await sequelize.close();
-		} catch (dbError) {
-			console.error(`Worker ${process.pid} error while closing DB connection:`, dbError);
-		}
+			try {
+				await sequelize.close();
+			} catch (dbError) {
+				console.error(`Worker ${process.pid} error while closing DB connection:`, dbError);
+			}
 
-		clearTimeout(forceExit);
-		process.exit(closeError ? 1 : 0);
-	});
+			clearTimeout(forceExit);
+			process.exit(closeError ? 1 : exitCode);
+		});
+	};
 };
 
+// A stray rejection/exception leaves the process in an unknown state: log it
+// with its stack, then exit (workers drain first; the primary respawns them).
+const onFatal =
+	(kind: string, shutdown?: (signal: string, exitCode: number) => void) => (err: unknown) => {
+		logger.fatal({ err }, `${kind} in process ${process.pid}`);
+		if (shutdown) shutdown(kind, 1);
+		else process.exit(1);
+	};
+
 if (cluster.isPrimary) {
+	// Init (DB connect + migrations) must finish before any worker starts
+	// accepting traffic; initializeEnvironment exits the process on failure.
+	console.log(`Process ${process.pid} started`);
+	console.log(`Total CPU is ${noOfCpus}`);
 	initializeEnvironment()
 		.then(() => {
 			console.log("Environment initialization completed successfully.");
+			for (let i = 0; i < noOfCpus; i++) {
+				cluster.fork();
+			}
 		})
 		.catch(error => {
 			console.error("Error during environment initialization:", error);
 			process.exit(1);
 		});
-	console.log(`Process ${process.pid} started`);
-	console.log(`Total CPU is ${noOfCpus}`);
-	for (let i = 0; i < noOfCpus; i++) {
-		cluster.fork();
-	}
 
 	let isShuttingDown = false;
 
@@ -125,12 +142,17 @@ if (cluster.isPrimary) {
 	};
 	process.on("SIGTERM", shutdownPrimary);
 	process.on("SIGINT", shutdownPrimary);
+	process.on("unhandledRejection", onFatal("unhandledRejection"));
+	process.on("uncaughtException", onFatal("uncaughtException"));
 } else {
 	const server = http.createServer(app);
 	server.on("error", onError);
 	server.on("listening", () => onListening(server));
 	server.listen(port);
 
-	process.on("SIGTERM", gracefulShutdown(server));
-	process.on("SIGINT", gracefulShutdown(server));
+	const shutdown = gracefulShutdown(server);
+	process.on("SIGTERM", signal => shutdown(signal));
+	process.on("SIGINT", signal => shutdown(signal));
+	process.on("unhandledRejection", onFatal("unhandledRejection", shutdown));
+	process.on("uncaughtException", onFatal("uncaughtException", shutdown));
 }

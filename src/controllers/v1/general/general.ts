@@ -29,4 +29,10 @@ const healthCheck = async (req: Request, res: Response, next: NextFunction) => {
 	return { status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() };
 };
 
-export { testFunction, uploadSinglFile, uploadMultipleFile, healthCheck };
+// Responds 503 if a dependency is down; the cause is logged, not returned.
+const readinessCheck = async (req: Request, res: Response, next: NextFunction) => {
+	await new General().checkReadiness();
+	return { status: "ready" };
+};
+
+export { testFunction, uploadSinglFile, uploadMultipleFile, healthCheck, readinessCheck };

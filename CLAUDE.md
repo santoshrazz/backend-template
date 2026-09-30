@@ -45,7 +45,20 @@ Layered Express app: **routes → dispatcher → controller → service**, versi
 - `src/config/load-env.ts` loads, in order, `.env.<NODE_ENV>`, `.env.worktree`, `.env.local` (later files override earlier ones via `dotenv`'s `override: true`); this must run before `src/config/db.ts` (which reads `DB_*` via `getOrThrow`, throwing if unset) or anything else that reads env vars.
 - `src/config/db.ts` builds the Sequelize instance; SSL dialect options are applied except when `NODE_ENV === "production"`.
 - `src/config/migrator.ts` configures Umzug against `src/migrations/*.ts` glob, using `SequelizeStorage` for the migrations table. Migrations run automatically on startup (`src/init/init.ts`) in addition to being runnable via the `migrate:*` scripts (`src/scripts/run-migration.ts`).
-- Migration files export `up`/`down` taking `{ context }` where `context._sequelize` is the Sequelize instance — see `src/migrations/1777832265532-create-user.ts` for the pattern. Note: `src/scripts/new-migration.ts`'s generated template destructures `{ _sequelize, _queryInterface }` from context, but `migrator.ts` only provides `_sequelize` and `_queryInterface` (not `sequelize`/`queryInterface`) — copy the existing migration's shape rather than the generator's template if `_queryInterface` is needed.
+- Migration files export `up`/`down` taking `{ context }` where `context` is `{ _sequelize, _queryInterface }` (see `src/config/migrator.ts`) — see `src/migrations/0001-create-user.ts` for the pattern. `src/scripts/new-migration.ts`'s generated template types the context as `{ sequelize, queryInterface }` but destructures the underscore names, so fix the type when using a scaffolded file.
+- Migrations glob is `process.cwd()/src/migrations/*.ts`, so they only load where `src/` exists and ts files are loadable (dev / `migrate:*`); the compiled `pnpm start` build runs startup migrations the same way, so it needs `src/` and a ts loader at runtime.
+
+### Cross-cutting pieces
+
+- **Validation**: `src/middleware/validator.ts` looks up a Joi schema in the exported `schemas` map by key `<path after /v1, "/" and "-" → "_">_<method>` (e.g. `POST /v1/upload/single` → `upload_single_post`); register schemas there from the owning route file. No schema = passthrough.
+- **Rate limiting**: `src/middleware/rateLimiter.ts` lazily uses a Redis store if `REDIS_URL` is set and reachable, else in-memory.
+- **Uploads**: `src/utils/upload.ts` talks to S3; the client is built lazily, so `AWS_*` env vars are only required once an upload/file route is hit.
+- **Logging**: `src/utils/logger.ts` is a console-only pino logger (`LOG_LEVEL` to tune); prefer it over `console.log` in new code.
+- **Probes**: `/health` (liveness) and `/ready` (DB + Redis if in use, 503 otherwise) are mounted in `app.ts` *outside* `/v1` so the API rate limiter never throttles them.
+- **Error handler**: logs every error with stack via pino; 5xx messages are replaced with a generic one unless `NODE_ENV=development`. Unmatched routes hit a catch-all 404 `AppError`. Logger redacts password/token-style keys in request/response bodies (extend `SENSITIVE_KEYS` in `utils/logger.ts`).
+- **Process safety**: `unhandledRejection`/`uncaughtException` log and exit (workers drain first). In production, startup fails if `REDIS_URL` is set but unreachable.
+- **Deploy env vars**: `TRUST_PROXY` (`true`/hop count/subnets; required behind a LB or every client shares one rate-limit bucket), `DB_SSL_CA` (PEM, for production DB cert verification), `DB_SSL_REJECT_UNAUTHORIZED=false` (explicit opt-out).
+- Docker files live in `docker/` (`Dockerfile`, `Docker-compose.yml`, `docker-compose-dev.yml`).
 
 ### Style
 

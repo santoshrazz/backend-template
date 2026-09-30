@@ -8,6 +8,43 @@ import { statusCodes } from "../utils/status-codes";
 
 const { TOO_MANY_REQUESTS } = statusCodes;
 
+const isProduction = () => process.env.NODE_ENV === "production";
+
+// ioredis emits connection failures as an "error" event, separate from
+// `connect()` rejecting — an EventEmitter with no "error" listener crashes
+// the process on that event, so the listener must be attached before
+// `connect()` is ever called, not just caught around the await.
+const connectRedis = async (url: string): Promise<Redis> => {
+	const client = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
+	client.on("error", err => logger.debug({ err }, "Redis client error"));
+	try {
+		await client.connect();
+		return client;
+	} catch (error) {
+		client.disconnect();
+		throw error;
+	}
+};
+
+/**
+ * Startup guard (called once from the primary before workers fork): in
+ * production, REDIS_URL set but unreachable is a hard failure. Without it each
+ * worker would silently fall back to its own in-memory counters, multiplying
+ * the effective limit by the worker count.
+ */
+const assertRedisReachable = async () => {
+	const redisUrl = process.env.REDIS_URL;
+	if (!redisUrl || !isProduction()) return;
+	await (await connectRedis(redisUrl)).quit();
+};
+
+let redisClient: Redis | undefined;
+
+/** Readiness probe: resolves if Redis isn't in use, rejects if it's in use but down. */
+const pingRedis = async () => {
+	if (redisClient) await redisClient.ping();
+};
+
 /**
  * Resolved once, lazily, on first request: a Redis-backed store if
  * REDIS_URL is set and reachable, otherwise express-rate-limit's built-in
@@ -19,19 +56,16 @@ const resolveStore = (): Promise<Store | undefined> => {
 	storePromise ??= (async () => {
 		const redisUrl = process.env.REDIS_URL;
 		if (!redisUrl) {
-			logger.info("Rate limiter using memory-storage (REDIS_URL not set)");
+			(isProduction() ? logger.warn : logger.info).call(
+				logger,
+				"Rate limiter using memory-storage (REDIS_URL not set); limits are per worker process",
+			);
 			return undefined;
 		}
 
-		const client = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 });
-		// ioredis emits connection failures as an "error" event, separate from
-		// `connect()` rejecting — an EventEmitter with no "error" listener
-		// crashes the process on that event, so this must be attached before
-		// `connect()` is ever called, not just caught around the await below.
-		client.on("error", err => logger.debug({ err }, "Redis client error"));
-
 		try {
-			await client.connect();
+			const client = await connectRedis(redisUrl);
+			redisClient = client;
 			logger.info("Rate limiter using redis");
 			return new RedisStore({
 				sendCommand: (...args: string[]) => {
@@ -40,11 +74,11 @@ const resolveStore = (): Promise<Store | undefined> => {
 				},
 			});
 		} catch (error) {
-			logger.warn(
+			(isProduction() ? logger.error : logger.warn).call(
+				logger,
 				{ err: error },
-				"Redis unavailable, rate limiter falling back to memory-storage",
+				"Redis unavailable, rate limiter falling back to per-worker memory-storage",
 			);
-			client.disconnect();
 			return undefined;
 		}
 	})();
@@ -93,4 +127,4 @@ const apiLimiter = buildLimiter({
 	limit: 100,
 });
 
-export { authLimiter, apiLimiter };
+export { authLimiter, apiLimiter, assertRedisReachable, pingRedis };

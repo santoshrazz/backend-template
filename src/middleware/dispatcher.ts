@@ -5,11 +5,11 @@ import { statusCodes } from "../utils";
 const { SUCCESS } = statusCodes;
 
 const dispatcher = async (req: Request, res: Response, next: NextFunction, func: AsyncHandler) => {
-    try {
-        const data = await func(req, res, next);
-        res.status(SUCCESS).json(camelize(data))
-    } catch (error) {
-        next(error);
-    }
-}
+	try {
+		const data = await func(req, res, next);
+		res.status(SUCCESS).json(camelize(data));
+	} catch (error) {
+		next(error);
+	}
+};
 export { dispatcher };

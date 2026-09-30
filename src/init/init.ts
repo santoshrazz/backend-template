@@ -1,4 +1,5 @@
 import { migrator, sequelize } from "../config";
+import { assertRedisReachable } from "../middleware/rateLimiter";
 
 // Initialize DB Connection
 async function initializeDatabase() {
@@ -7,6 +8,15 @@ async function initializeDatabase() {
 		console.log("✅ Database connection established successfully");
 	} catch (error) {
 		console.error("❌ Unable to connect to the database:", error);
+		process.exit(1);
+	}
+}
+
+async function checkRedis() {
+	try {
+		await assertRedisReachable();
+	} catch (error) {
+		console.error("❌ REDIS_URL is set but Redis is unreachable:", error);
 		process.exit(1);
 	}
 }
@@ -29,7 +39,8 @@ async function runStartupMigrations() {
 // Initialize everything in the correct order
 async function initializeEnvironment() {
 	await initializeDatabase(); // 1. Connect to database (env vars already loaded)
-	await runStartupMigrations(); // 2. Run migrations
+	await checkRedis(); // 2. Fail fast if Redis is configured but down (production)
+	await runStartupMigrations(); // 3. Run migrations
 }
 
 export { initializeEnvironment };
