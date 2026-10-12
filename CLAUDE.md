@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 pnpm start:dev          # dev server via nodemon + ts-node (NODE_ENV=development, watches src/)
-pnpm build              # tsc compile to dist/
+pnpm build              # tsc -p tsconfig.build.json -> dist/ (excludes *.test.ts)
+pnpm test               # node:test via ts-node, runs src/**/*.test.ts
 pnpm start              # run compiled server (node dist/bin/www.js)
 pnpm lint               # eslint .
 pnpm lint:fix           # eslint . --fix
@@ -18,9 +19,9 @@ pnpm migrate:status           # show applied/pending migrations
 pnpm migrate:reset            # revert all migrations
 ```
 
-There is no test suite configured (`pnpm test` is a stub that exits 1) and no single-test command.
+Tests use the built-in `node:test` runner (no extra deps); they live next to the code as `src/**/*.test.ts` (see `src/__tests__/smoke.test.ts`). Run one file with `node --require ts-node/register/transpile-only --test src/__tests__/smoke.test.ts`.
 
-Package manager is pnpm (per README); a `package-lock.json` also exists but CI (`.github/workflows/build.yml`) runs `npm ci --ignore-scripts` + `npm run build`. Husky's pre-commit hook runs `npm run lint`.
+Package manager is pnpm only (`package-lock.json` was removed); Node >= 22 (`engines`, Dockerfile and CI all use 22). CI (`.github/workflows/build.yml`) runs `pnpm install --frozen-lockfile`, lint, test, build. Husky's pre-commit hook runs `npm run lint`.
 
 ## Architecture
 
@@ -58,7 +59,7 @@ Layered Express app: **routes → dispatcher → controller → service**, versi
 - **Error handler**: logs every error with stack via pino; 5xx messages are replaced with a generic one unless `NODE_ENV=development`. Unmatched routes hit a catch-all 404 `AppError`. Logger redacts password/token-style keys in request/response bodies (extend `SENSITIVE_KEYS` in `utils/logger.ts`).
 - **Process safety**: `unhandledRejection`/`uncaughtException` log and exit (workers drain first). In production, startup fails if `REDIS_URL` is set but unreachable.
 - **Deploy env vars**: `TRUST_PROXY` (`true`/hop count/subnets; required behind a LB or every client shares one rate-limit bucket), `DB_SSL_CA` (PEM, for production DB cert verification), `DB_SSL_REJECT_UNAUTHORIZED=false` (explicit opt-out).
-- Docker files live in `docker/` (`Dockerfile`, `Docker-compose.yml`, `docker-compose-dev.yml`).
+- Docker files live in `docker/` (`Dockerfile`, `Docker-compose.yml`, `docker-compose-dev.yml`). The image runs as the non-root `node` user and has a `HEALTHCHECK` on `/health`; `.dockerignore` keeps `.env*` and `node_modules` out of the build context.
 
 ### Style
 

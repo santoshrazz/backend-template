@@ -1,5 +1,5 @@
 # -------- 1. Build Stage --------
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /usr/src/app
 
@@ -20,7 +20,7 @@ RUN pnpm run build
 
 
 # -------- 2. Production Stage --------
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /usr/src/app
 
@@ -35,8 +35,14 @@ RUN pnpm install --frozen-lockfile --prod
 # Copy compiled JS from builder
 COPY --from=builder /usr/src/app/dist ./dist
 
+# Drop root: the app only needs read access to /usr/src/app
+USER node
+
 # Expose port
 EXPOSE 3000
+
+# Liveness probe (/health is outside the rate limiter)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # Run compiled app (no pnpm needed at runtime)
 CMD ["node", "dist/bin/www.js"]

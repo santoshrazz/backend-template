@@ -1,8 +1,13 @@
 import express, { Express } from "express";
 import helmet from "helmet";
-import { globalErrorHandler, loggerMiddleware, validator, apiLimiter } from "./middleware";
-import { AppError, serveFile, statusCodes } from "./utils";
-import { dispatcher } from "./middleware";
+import {
+	globalErrorHandler,
+	loggerMiddleware,
+	validator,
+	apiLimiter,
+	dispatcher,
+} from "./middleware";
+import { serveFile } from "./utils";
 import { healthCheck, readinessCheck } from "./controllers";
 import v1 from "./routes";
 
@@ -44,11 +49,6 @@ app.use("/v1", apiLimiter, v1);
 // Not wrapped in the /v1 router or `dispatcher` — it streams the file body
 // and sets its own headers instead of returning JSON (see utils/upload.ts).
 app.get("/files/:key", serveFile);
-
-// Catch-all: anything that reached here matched no route.
-app.use((req, _res, next) => {
-	next(new AppError(statusCodes.NOT_FOUND, `Route not found: ${req.method} ${req.originalUrl}`));
-});
 
 // Global Error Handler Middleware
 app.use(globalErrorHandler);
