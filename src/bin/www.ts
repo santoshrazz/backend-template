@@ -8,12 +8,12 @@ import { initializeEnvironment } from "../init/init";
 import { sequelize } from "../config";
 import app from "../app";
 import http from "node:http";
-import { cpus } from "node:os";
+import os from "node:os";
 import cluster from "node:cluster";
 import { logger } from "../utils/logger";
 
-const port = process.env.PORT || "3000";
-const noOfCpus = process.env.NODE_ENV === "development" ? 1 : cpus().length;
+const port = normalizePort(process.env.PORT);
+const noOfCpus = getWorkerCount();
 
 // Handle server listen errors (e.g. port already in use)
 const onError = (error: NodeJS.ErrnoException) => {
@@ -155,4 +155,23 @@ if (cluster.isPrimary) {
 	process.on("SIGINT", signal => shutdown(signal));
 	process.on("unhandledRejection", onFatal("unhandledRejection", shutdown));
 	process.on("uncaughtException", onFatal("uncaughtException", shutdown));
+}
+
+function getWorkerCount() {
+	if (process.env.NODE_ENV?.toLocaleLowerCase() === "development") {
+		return 1;
+	}
+	return os.availableParallelism() || 1;
+}
+
+// Accepts a number or numeric string ("3000", " 3000 ", 3000); unset/blank falls
+// back to the default. Anything else (NaN, "abc", 3.5, -1, 70000) fails fast at
+// startup instead of silently listening somewhere unexpected.
+function normalizePort(value: string | number | undefined, fallback = 3000): number {
+	if (value === undefined || `${value}`.trim() === "") return fallback;
+	const port = Number(`${value}`.trim());
+	if (!Number.isInteger(port) || port < 0 || port > 65535) {
+		throw new Error(`Invalid PORT "${value}": expected an integer between 0 and 65535`);
+	}
+	return port;
 }
