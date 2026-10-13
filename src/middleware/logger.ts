@@ -54,12 +54,11 @@ const requestLogger = pinoHttp({
 			return res;
 		},
 	},
-	// No `user` prop — nothing in this template sets req.user yet (no auth
-	// middleware); add it back once one does instead of logging it as undefined.
 	customProps(req) {
 		const expressReq = req as Request & { id?: string };
 		return {
 			requestId: expressReq.id,
+			userId: expressReq.user?.id,
 			requestBody: expressReq.body,
 		};
 	},

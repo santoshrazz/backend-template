@@ -22,7 +22,10 @@ const sequelize = new Sequelize(dbName, dbUsername, dbPassword, {
 		acquire: 30000,
 		idle: 10000,
 	},
-	dialectOptions: process.env.NODE_ENV === "production" ? dilectOptions : {},
+	dialectOptions:
+		process.env.NODE_ENV === "production" && process.env.DB_SSL !== "false"
+			? dilectOptions
+			: {},
 });
 
 export { sequelize };

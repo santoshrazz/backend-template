@@ -12,6 +12,7 @@ import { healthCheck, readinessCheck } from "./controllers";
 import v1 from "./routes";
 
 console.log(`Running in ${process.env.NODE_ENV} mode`);
+const BODY_LIMIT = process.env.BODY_LIMIT || "100kb";
 const app: Express = express();
 app.disable("x-powered-by");
 
@@ -28,12 +29,12 @@ app.set("trust proxy", parseTrustProxy(process.env.TRUST_PROXY));
 // Middleware
 app.use(helmet())
 	.use(
-		express.json({
-			limit: "100mb",
-		}),
+		// Uploads go through multer, so JSON/urlencoded bodies stay small. Raise per
+		// route if one needs more, or globally via BODY_LIMIT.
+		express.json({ limit: BODY_LIMIT }),
 	)
 	.use(loggerMiddleware)
-	.use(express.urlencoded({ extended: true }))
+	.use(express.urlencoded({ extended: true, limit: BODY_LIMIT }))
 	// Must come after body parsing — it validates req.body.
 	.use(validator);
 
